@@ -1,0 +1,167 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.datasets import fetch_california_housing
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LinearRegression, SGDRegressor
+from sklearn.metrics import mean_squared_error, r2_score
+
+# Set random seed for reproducibility
+np.random.seed(42)
+
+# 1. Load the Data
+california = fetch_california_housing()
+X = california.data
+y = california.target
+
+# Create a DataFrame for easier manipulation
+df = pd.DataFrame(X, columns=california.feature_names)
+df['MedHouseVal'] = y
+
+# Focusing on MedInc for this exercise
+X_medinc = df[['MedInc']].values
+y_houseval = df['MedHouseVal'].values
+
+# Plot scatter plot of MedInc vs. MedHouseVal
+plt.figure(figsize=(10, 6))
+plt.scatter(X_medinc, y_houseval, alpha=0.5)
+plt.title('Median Income vs. Median House Value in California Districts')
+plt.xlabel('Median Income (scaled to $10,000s)')
+plt.ylabel('Median House Value (scaled to $100,000s)')
+plt.tight_layout()
+plt.savefig('income_vs_houseval_scatter.png', dpi=300)
+# plt.close()  # Remove this line
+
+# Calculate summary statistics
+income_stats = {
+    'mean': np.mean(X_medinc),
+    'median': np.median(X_medinc),
+    'std': np.std(X_medinc)
+}
+
+house_val_stats = {
+    'mean': np.mean(y_houseval),
+    'median': np.median(y_houseval),
+    'std': np.std(y_houseval)
+}
+
+print("Median Income Statistics:")
+print(f"Mean: ${income_stats['mean']*10000:.2f}")
+print(f"Median: ${income_stats['median']*10000:.2f}")
+print(f"Standard Deviation: ${income_stats['std']*10000:.2f}")
+
+print("\nMedian House Value Statistics:")
+print(f"Mean: ${house_val_stats['mean']*100000:.2f}")
+print(f"Median: ${house_val_stats['median']*100000:.2f}")
+print(f"Standard Deviation: ${house_val_stats['std']*100000:.2f}")
+
+# Calculate correlation coefficient
+correlation = np.corrcoef(X_medinc.flatten(), y_houseval)[0, 1]
+print(f"\nCorrelation between Income and House Value: {correlation:.4f}")
+
+# 2. Preprocess the Data
+X_train, X_test, y_train, y_test = train_test_split(
+    X_medinc, y_houseval, test_size=0.2, random_state=42
+)
+
+# scaler = StandardScaler()
+# X_train_scaled = scaler.fit_transform(X_train)
+# X_test_scaled = scaler.transform(X_test)
+
+# 3. Build Linear Regression Models
+
+# 3.1 Using Scikit-learn's built-in LinearRegression (Batch)
+batch_model = LinearRegression()
+batch_model.fit(X_train, y_train)
+
+# 3.2 Using Stochastic Gradient Descent
+sgd_model = SGDRegressor(
+    max_iter=1000,
+    tol=1e-3,
+    penalty=None,
+    eta0=0.01,
+    random_state=42
+)
+sgd_model.fit(X_train, y_train)
+
+# 4. Make Predictions
+batch_predictions = batch_model.predict(X_test)
+sgd_predictions = sgd_model.predict(X_test)
+
+# Predict house value for a district with median income of $80,000
+new_income = np.array([[8.0]])
+batch_prediction_80k = batch_model.predict(new_income)[0]
+sgd_prediction_80k = sgd_model.predict(new_income)[0]
+
+print(f"\nPredicted house value for district with $80,000 median income:")
+print(f"Batch Gradient Descent: ${batch_prediction_80k*100000:.2f}")
+print(f"Stochastic Gradient Descent: ${sgd_prediction_80k*100000:.2f}")
+
+# 5. Evaluate Models
+batch_mse = mean_squared_error(y_test, batch_predictions)
+sgd_mse = mean_squared_error(y_test, sgd_predictions)
+
+batch_r2 = r2_score(y_test, batch_predictions)
+sgd_r2 = r2_score(y_test, sgd_predictions)
+
+print("\nModel Evaluation:")
+print(f"Batch Gradient Descent - MSE: {batch_mse:.4f}, R²: {batch_r2:.4f}")
+print(f"Stochastic Gradient Descent - MSE: {sgd_mse:.4f}, R²: {sgd_r2:.4f}")
+
+# 6. Visualise the Results
+plt.figure(figsize=(10, 6))
+plt.scatter(X_test, y_test, alpha=0.5, label='Test Data')
+
+# Plot the regression lines
+x_range = np.linspace(X_test.min(), X_test.max(), 100).reshape(-1, 1)
+plt.plot(
+    x_range,
+    batch_model.predict(x_range),
+    color='red',
+    linewidth=2,
+    label=f'Batch Gradient Descent (R² = {batch_r2:.3f})'
+)
+plt.plot(
+    x_range,
+    sgd_model.predict(x_range),
+    color='green',
+    linewidth=2,
+    linestyle='--',
+    label=f'Stochastic Gradient Descent (R² = {sgd_r2:.3f})'
+)
+
+plt.title('Linear Regression: Income vs. House Value')
+plt.xlabel('Median Income (scaled to $10,000s)')
+plt.ylabel('Median House Value (scaled to $100,000s)')
+plt.legend()
+plt.tight_layout()
+plt.savefig('regression_results.png', dpi=300)
+#plt.close() 
+
+# Feature expansion for comparison
+print("\nFeature Expansion Analysis:")
+# Creating a model with multiple features for comparison
+X_multi = df[['MedInc', 'HouseAge', 'AveRooms', 'Latitude', 'Longitude']].values
+X_train_multi, X_test_multi, y_train, y_test = train_test_split(
+    X_multi, y_houseval, test_size=0.2, random_state=42
+)
+
+multi_model = LinearRegression()
+multi_model.fit(X_train_multi, y_train)
+multi_predictions = multi_model.predict(X_test_multi)
+multi_r2 = r2_score(y_test, multi_predictions)
+
+print(f"Single feature model R²: {batch_r2:.4f}")
+print(f"Multiple feature model R²: {multi_r2:.4f}")
+print(f"Improvement: {(multi_r2 - batch_r2) / batch_r2 * 100:.2f}%")
+
+# Feature importance analysis
+features = ['MedInc', 'HouseAge', 'AveRooms', 'Latitude', 'Longitude']
+coefficients = multi_model.coef_
+feat_importance = pd.DataFrame({'Feature': features, 'Coefficient': coefficients})
+feat_importance = feat_importance.sort_values(by='Coefficient', key=abs, ascending=False)
+
+print("\nFeature Importance (based on coefficient magnitude):")
+for i, row in feat_importance.iterrows():
+    print(f"{row['Feature']}: {row['Coefficient']:.4f}")
